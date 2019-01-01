@@ -1,0 +1,50 @@
+@startuml
+
+skinparam sequenceMessageAlign center
+skinparam backgroundColor white
+skinparam EntityBorderColor Black
+
+skinparam sequence {
+ActorBorderColor black
+LifeLineBorderColor black
+ParticipantBorderColor black
+ParticipantFontColor black
+ActorFontColor Black
+}
+hide footbox
+
+actor "Confirmed\nSubscriber" as user #e24ad3
+participant "Unsubscribe Page" as unsubscribePage #orange
+entity "Unsubscribe\nFunction" as unsubscribeFun #red
+database "Cloud Firestore" as firestore #gray
+actor Admin as admin #blue
+
+activate user #e24ad3
+user -[#e24ad3]> unsubscribePage : Click Unsubscription Link\n""(id)""
+activate unsubscribePage #orange
+unsubscribePage -[#orange]> unsubscribeFun : Cancel Subscription\n""(id)""
+activate unsubscribeFun #red
+unsubscribePage -[#orange]> user : Inform Unsubscription
+deactivate user
+deactivate unsubscribePage
+unsubscribeFun -> firestore : Get Old State\n""(id)""
+activate firestore #gray
+firestore -[#gray]>> unsubscribeFun : ""oldState""
+deactivate firestore
+unsubscribeFun -> unsubscribeFun : Validate Info\n""(oldState)""
+alt IF INVALID
+    unsubscribeFun ->> admin : Send Warning Email
+    activate admin #blue
+    deactivate admin
+else IF VALID
+    unsubscribeFun ->> firestore : Update Subscriber\n""(id)""
+    activate firestore #gray
+    deactivate firestore
+    unsubscribeFun ->> admin : Send Notification Email
+    activate admin #blue
+    deactivate admin
+    deactivate unsubscribeFun
+end
+
+@enduml
+

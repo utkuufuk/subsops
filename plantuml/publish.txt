@@ -1,0 +1,40 @@
+@startuml
+
+skinparam sequenceMessageAlign center
+skinparam backgroundColor white
+skinparam EntityBorderColor Black
+
+skinparam sequence {
+ActorBorderColor black
+LifeLineBorderColor black
+ParticipantBorderColor black
+ParticipantFontColor black
+ActorFontColor Black
+}
+hide footbox
+
+actor "Confirmed Subscriber" as user #e24ad3
+entity "Publish Function" as publishFun #orange
+database "Cloud Firestore" as firestore #gray
+actor Admin as admin #blue
+
+activate admin #blue
+admin -[#blue]>> firestore : Create New Blog Post\n""(header, url)""
+activate firestore #gray
+deactivate admin
+firestore -[#gray]>> publishFun : Trigger ""(header, url)""
+deactivate firestore
+activate publishFun #orange
+|||
+publishFun -[#orange]> firestore : Get Confirmed Subscribers
+activate firestore #gray
+firestore -[#gray]> publishFun : ""confirmedSubscribers""
+loop each subscriber
+    |||
+    deactivate firestore
+    publishFun -[#orange]>> user : Send Post Notification\n""(header, url,""\n""unsubscriptionLink)""
+    activate user #e24ad3
+    deactivate publishFun
+    deactivate user
+end
+@enduml

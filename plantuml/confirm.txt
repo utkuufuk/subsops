@@ -1,0 +1,48 @@
+@startuml
+
+skinparam sequenceMessageAlign center
+skinparam backgroundColor white
+skinparam EntityBorderColor Black
+
+skinparam sequence {
+ActorBorderColor black
+LifeLineBorderColor black
+ParticipantBorderColor black
+ParticipantFontColor black
+ActorFontColor Black
+}
+hide footbox
+
+actor "Unconfirmed\nSubscriber" as user #e24ad3
+participant "Complete Page" as completePage #22AA44
+entity "Confirm Function" as confirmFun #red
+database "Cloud Firestore" as firestore #gray
+actor Admin as admin #blue
+
+activate user #e24ad3
+user -[#e24ad3]> completePage : Click Confirmation Link\n""(id)""
+activate completePage #22AA44
+completePage -[#22AA44]>> confirmFun : Confirm Subscriber\n""(id)""
+activate confirmFun #red
+completePage -[#22AA44]> user : Inform Confirmation
+deactivate completePage
+deactivate user
+confirmFun -> firestore : Get Old State\n""(id)""
+activate firestore #gray
+firestore -[#gray]>> confirmFun : ""oldState""
+deactivate firestore
+confirmFun -> confirmFun : Validate Info\n""(oldState)""
+alt IF INVALID
+    confirmFun ->> admin : Send Warning Email
+    activate admin #blue
+    deactivate admin
+else IF VALID
+    confirmFun ->> firestore : Update Subscriber\n""(id)""
+    activate firestore #gray
+    deactivate firestore
+    confirmFun ->> admin : Send Notification Email
+    activate admin #blue
+    deactivate admin
+    deactivate confirmFun
+end
+@enduml
