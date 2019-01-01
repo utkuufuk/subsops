@@ -45,6 +45,7 @@ function updateSubscriber(request, response, type, oldState, newState) {
                 subject = `User ${type} Notification`;
                 message = `${type} successful.\nID: ${id}\nName: ${sub.name}\nEmail: ${sub.email}`;
                 sub["state"] = newState;
+                sub["updateDate"] = new Date();
                 promises.push(db.doc("subscribers/" + id).set(sub));
             }
             promises.unshift(sendEmail(functions.config().admin.email, subject, message));
