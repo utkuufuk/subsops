@@ -15,7 +15,6 @@ hide footbox
 
 actor User as user #e24ad3
 participant "Subscribe Page" as subscribePage #orange
-participant "Confirm Page" as confirmPage #70d070
 entity "Subscribe Function" as subscribeFun #yellow
 database "Cloud Firestore" as firestore #gray
 actor Admin as admin #blue
@@ -27,11 +26,8 @@ subscribePage -[#orange]> subscribePage : Validate Info\n""(name, email)""
 alt IF VALID
     subscribePage -[#orange]>> subscribeFun : Create New Subscriber\n""(name, email)""
     activate subscribeFun #yellow
-    subscribePage -[#orange]> confirmPage : Redirect
+    subscribePage -[#orange]> user : Inform About Confirmation Email
     deactivate subscribePage
-    activate confirmPage #70d070
-    confirmPage -[#green]> user : Inform About Confirmation Email
-    deactivate confirmPage
     deactivate user
     subscribeFun -[#dfc000]> subscribeFun : Validate Info\n""(name, email)""
     alt IF INVALID
