@@ -1,0 +1,8 @@
+
+### Unsubscribe
+POST http://localhost:5000/blog-utkuufuk/us-central1/unsubscribe
+Content-Type: application/json
+
+{
+    "id": "<user_id>"
+}
