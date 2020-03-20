@@ -10,19 +10,17 @@ admin.initializeApp(functions.config().firebase);
 var db = admin.firestore();
 db.settings(settings);
 
-function createMailTransport() {
-  return nodemailer.createTransport({
-    service: "gmail",
-    host: "smtp.gmail.com",
-    auth: {
-      user: functions.config().admin.email,
-      pass: functions.config().admin.password
-    }
-  });
-}
+const transport = nodemailer.createTransport({
+  service: "gmail",
+  host: "smtp.gmail.com",
+  auth: {
+    user: functions.config().admin.email,
+    pass: functions.config().admin.password
+  }
+});
 
 // sends an email using admin creds
-function sendEmail(transport, address, header, body, contentType) {
+function sendEmail(address, header, body, contentType) {
   const promise = transport.sendMail({
     from: `"Utku Ufuk" <${functions.config().admin.email}>`,
     to: address,
@@ -32,18 +30,13 @@ function sendEmail(transport, address, header, body, contentType) {
 
   promise
     .then(() =>
-      console.log(
-        `Blog post notification email sent: `,
-        `${sub.name}, ${sub.email}, ${post.header}, ${post.url}`
-      )
+      console.log(`Blog post notification email sent: ${address}, ${header}`)
     )
-    .catch(err => {
+    .catch(err =>
       console.error(
-        `Failed to send blog post notification email: `,
-        `${sub.name}, ${sub.email}, ${post.header}, ${post.url} `,
-        `Cause: ${err}`
-      );
-    });
+        `Failed to send blog post notification email: ${address}, ${header}, Cause: ${err}`
+      )
+    );
   return promise;
 }
 
@@ -63,9 +56,7 @@ function insertSubscriber(response, sub) {
         `${functions.config().blog.website}/complete/?name=${sub.name}` +
         `&id=${sub.id}\n\nCheers,\n\nUtku`;
 
-      const transport = createMailTransport();
       const confirmPromise = sendEmail(
-        transport,
         sub.email,
         "Welcome to Utku's Blog!",
         body,
@@ -77,7 +68,6 @@ function insertSubscriber(response, sub) {
       body = "ID: " + sub.id + "\nName: " + sub.name + "\nEmail: " + sub.email;
 
       const notifyPromise = sendEmail(
-        transport,
         functions.config().admin.email,
         subject,
         body,
@@ -111,9 +101,7 @@ function createSubscriber(request, response) {
       `Illegal subscriber creation attempt:\nEvent Date: ` +
       `${new Date().toISOString()} \nName: ${sub.name}\nEmail ${sub.email}`;
 
-    const transport = createMailTransport();
     return sendEmail(
-      transport,
       functions.config().admin.email,
       "Illegal Subscription",
       body,
@@ -151,9 +139,7 @@ function updateSubscriber(request, response, type, oldState, newState) {
         promises.push(db.doc("subscribers/" + id).set(sub));
       }
 
-      const transport = createMailTransport();
       const mailPromise = sendEmail(
-        transport,
         functions.config().admin.email,
         subject,
         message,
@@ -179,7 +165,6 @@ exports.publish = functions.firestore
   .document("blogposts/{id}")
   .onCreate((snap, _) => {
     const post = snap.data();
-    const transport = createMailTransport();
     return db
       .collection("subscribers")
       .where("state", "==", "confirmed")
