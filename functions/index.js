@@ -184,13 +184,7 @@ exports.publish = functions.firestore
             `<p>Have a nice day,<p>Utku<p><a style="font-size: 9px" href=${
               functions.config().blog.website
             }/unsubscribe/?name=${sub.name}&id=${result.id}>unsubscribe</a>`;
-          const mailPromise = sendEmail(
-            transport,
-            sub.email,
-            post.header,
-            body,
-            "html"
-          );
+          const mailPromise = sendEmail(sub.email, post.header, body, "html");
           promises.push(mailPromise);
         });
         console.log("All emails queued.");
