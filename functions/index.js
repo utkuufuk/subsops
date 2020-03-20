@@ -10,9 +10,8 @@ admin.initializeApp(functions.config().firebase);
 var db = admin.firestore();
 db.settings(settings);
 
-// sends an email using admin creds
-function sendEmail(address, header, body, contentType) {
-  const mailTransport = nodemailer.createTransport({
+function createMailTransport() {
+  return nodemailer.createTransport({
     service: "gmail",
     host: "smtp.gmail.com",
     auth: {
@@ -20,15 +19,32 @@ function sendEmail(address, header, body, contentType) {
       pass: functions.config().admin.password
     }
   });
+}
 
-  const options = {
+// sends an email using admin creds
+function sendEmail(transport, address, header, body, contentType) {
+  const promise = transport.sendMail({
     from: `"Utku Ufuk" <${functions.config().admin.email}>`,
     to: address,
     subject: header,
     [contentType]: body
-  };
+  });
 
-  return mailTransport.sendMail(options);
+  promise
+    .then(() =>
+      console.log(
+        `Blog post notification email sent: `,
+        `${sub.name}, ${sub.email}, ${post.header}, ${post.url}`
+      )
+    )
+    .catch(err => {
+      console.error(
+        `Failed to send blog post notification email: `,
+        `${sub.name}, ${sub.email}, ${post.header}, ${post.url} `,
+        `Cause: ${err}`
+      );
+    });
+  return promise;
 }
 
 function insertSubscriber(response, sub) {
@@ -46,7 +62,10 @@ function insertSubscriber(response, sub) {
         `Please click the link below to confirm your subscription:\n\n` +
         `${functions.config().blog.website}/complete/?name=${sub.name}` +
         `&id=${sub.id}\n\nCheers,\n\nUtku`;
+
+      const transport = createMailTransport();
       const confirmPromise = sendEmail(
+        transport,
         sub.email,
         "Welcome to Utku's Blog!",
         body,
@@ -56,7 +75,9 @@ function insertSubscriber(response, sub) {
       // send a new subscriber notificaiton email
       let subject = "You Have a New Unconfirmed Subsciber!";
       body = "ID: " + sub.id + "\nName: " + sub.name + "\nEmail: " + sub.email;
+
       const notifyPromise = sendEmail(
+        transport,
         functions.config().admin.email,
         subject,
         body,
@@ -89,7 +110,10 @@ function createSubscriber(request, response) {
     const body =
       `Illegal subscriber creation attempt:\nEvent Date: ` +
       `${new Date().toISOString()} \nName: ${sub.name}\nEmail ${sub.email}`;
+
+    const transport = createMailTransport();
     return sendEmail(
+      transport,
       functions.config().admin.email,
       "Illegal Subscription",
       body,
@@ -126,7 +150,10 @@ function updateSubscriber(request, response, type, oldState, newState) {
         sub["updateDate"] = new Date();
         promises.push(db.doc("subscribers/" + id).set(sub));
       }
+
+      const transport = createMailTransport();
       const mailPromise = sendEmail(
+        transport,
         functions.config().admin.email,
         subject,
         message,
@@ -152,6 +179,7 @@ exports.publish = functions.firestore
   .document("blogposts/{id}")
   .onCreate((snap, _) => {
     const post = snap.data();
+    const transport = createMailTransport();
     return db
       .collection("subscribers")
       .where("state", "==", "confirmed")
@@ -160,19 +188,27 @@ exports.publish = functions.firestore
         const promises = [];
         result.forEach(result => {
           const sub = result.data();
+
+          // test email should only be sent to testers (if any of header, date or url is empty)
+          if ((!post.header || !post.url || !post.date) && !sub.tester) {
+            return;
+          }
+
           const body =
             `Hey ${sub.name},<p>Check out my new blog post:<br><a href=${post.url}>${post.url}</a>` +
             `<p>Have a nice day,<p>Utku<p><a style="font-size: 9px" href=${
               functions.config().blog.website
             }/unsubscribe/?name=${sub.name}&id=${result.id}>unsubscribe</a>`;
-          const mailPromise = sendEmail(sub.email, post.header, body, "html");
-          promises.push(mailPromise);
-          console.log(
-            `Blog post notification email sent: `,
-            `${sub.name}, ${sub.email}, ${post.header}, ${post.url}`
+          const mailPromise = sendEmail(
+            transport,
+            sub.email,
+            post.header,
+            body,
+            "html"
           );
+          promises.push(mailPromise);
         });
-        console.log("All blog post notification emails sent.");
+        console.log("All emails queued.");
         return Promise.all(promises);
       })
       .catch(err => {
