@@ -1,5 +1,5 @@
 # subops
-Manages subscriber operations for [my blog](https://utkuufuk.github.io).
+Manages subscriber operations for [my blog](https://utkuufuk.com).
 
 ## Serve Functions Locally or Deploy to Cloud
 Serve functions locally without deploying functions to cloud:
@@ -10,7 +10,7 @@ sudo firebase serve --only functions --port=5123
 
 Deploy functions to cloud:
 ``` sh
-firebase deploy --only functions
+npm run deploy
 ```
 
 ## Configuration
@@ -19,8 +19,8 @@ firebase deploy --only functions
 # set admin username & password
 firebase functions:config:set admin.email="utkuufuk" admin.password="ilikebananas"
 
-# set trello secret
-firebase functions:config:set blog.website="https://utkuufuk.github.io"
+# set website url
+firebase functions:config:set blog.website="https://utkuufuk.com"
 ```
 
 ### Retrieve Current Envvironment Configuration
