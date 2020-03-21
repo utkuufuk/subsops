@@ -189,6 +189,13 @@ exports.publish = functions.firestore
 
           // test email should only be sent to testers (if any of header, date or url is empty)
           if ((!post.header || !post.url || !post.date) && !sub.tester) {
+            console.log(`not sending test email to non-test user: ${sub.name}`);
+            return;
+          }
+
+          // do not send to users with a "skip" attribute set to "true"
+          if (sub.skip) {
+            console.log(`skipping flagged user: ${sub.name}, ${sub.email}`);
             return;
           }
 
