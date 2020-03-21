@@ -19,6 +19,9 @@ const transport = nodemailer.createTransport({
   }
 });
 
+const MAX_ATTEMPTS = 3;
+const numAttempts = new Map();
+
 // sends an email using admin creds
 function sendEmail(address, header, body, contentType) {
   const promise = transport.sendMail({
@@ -32,11 +35,21 @@ function sendEmail(address, header, body, contentType) {
     .then(() =>
       console.log(`Blog post notification email sent: ${address}, ${header}`)
     )
-    .catch(err =>
-      console.error(
-        `Failed to send blog post notification email: ${address}, ${header}, Cause: ${err}`
-      )
-    );
+    .catch(err => {
+      console.warn(
+        `Warning: Failed to send blog post notification email: ${address}, ${header}, Cause: ${err}`
+      );
+
+      // try again if we receive a 421 error code, unless we already tried 3 times
+      const attempts = numAttempts.get(address);
+      if (err.status === 421 && attempts < MAX_ATTEMPTS) {
+        console.warn(
+          `Attempting to send to ${address} for the ${attempts}. time...`
+        );
+        numAttempts.set(address, attempts + 1);
+        return sendEmail(address, header, body, contentType);
+      }
+    });
   return promise;
 }
 
