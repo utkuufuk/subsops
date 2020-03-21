@@ -103,32 +103,51 @@ function insertSubscriber(response, sub) {
 
 function createSubscriber(request, response) {
   const sub = request.body;
-  const valid =
-    sub.name !== undefined &&
-    sub.name.length > 0 &&
-    sub.name.length < 20 &&
-    validator.validate(sub.email) &&
-    new RegExp(/^([a-zA-ZöçşığüÖÇŞİĞÜ]+)$/).test(sub.name);
-  if (!valid) {
-    const body =
-      `Illegal subscriber creation attempt:\nEvent Date: ` +
-      `${new Date().toISOString()} \nName: ${sub.name}\nEmail ${sub.email}`;
+  return db
+    .collection("subscribers")
+    .where("email", "==", sub.email)
+    .get()
+    .then(results => {
+      if (results.empty) {
+        return null;
+      }
+      return results.docs[0].data();
+    })
+    .then(user => {
+      if (user) {
+        return response.status(200).send(sub.name, user.state);
+      }
 
-    return sendEmail(
-      functions.config().admin.email,
-      "Illegal Subscription",
-      body,
-      "text"
-    )
-      .then(result => {
-        console.warn("Warning mail sent:", result, "\n", body);
-        return response.status(400).send(body);
-      })
-      .catch(err => {
-        console.error(err);
-      });
-  }
-  return insertSubscriber(response, sub);
+      return (
+        sub.name !== undefined &&
+        sub.name.length > 0 &&
+        sub.name.length < 20 &&
+        validator.validate(sub.email) &&
+        new RegExp(/^([a-zA-ZöçşığüÖÇŞİĞÜ]+)$/).test(sub.name)
+      );
+    })
+    .then(valid => {
+      if (!valid) {
+        const body =
+          `Illegal subscriber creation attempt:\nEvent Date: ` +
+          `${new Date().toISOString()} \nName: ${sub.name}\nEmail ${sub.email}`;
+
+        return sendEmail(
+          functions.config().admin.email,
+          "Illegal Subscription",
+          body,
+          "text"
+        );
+      }
+      return insertSubscriber(response, sub);
+    })
+    .then(result => {
+      console.warn("Warning mail sent:", result, "\n", body);
+      return response.status(422).send(body);
+    })
+    .catch(err => {
+      console.error(err);
+    });
 }
 
 function updateSubscriber(request, response, type, oldState, newState) {
