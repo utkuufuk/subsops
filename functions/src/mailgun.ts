@@ -29,7 +29,9 @@ const send = (to: string, subject: string, template: string, params: any): Promi
   return createEmailPromise(email);
 };
 
-const log = (subject: string, text: string): Promise<any> => {
+const log = (subject: string, text: string, type: string): Promise<any> => {
+  console[type](text);
+
   const email = {
     from: `Utku ${functions.config().mailgun.email}`,
     to: 'utkuufuk@gmail.com',
@@ -41,6 +43,8 @@ const log = (subject: string, text: string): Promise<any> => {
 };
 
 export default {
-  log,
+  error: (subject: string, text: string) => log(subject, text, 'error'),
+  warn: (subject: string, text: string) => log(subject, text, 'warn'),
+  info: (subject: string, text: string) => log(subject, text, 'log'),
   send,
 };

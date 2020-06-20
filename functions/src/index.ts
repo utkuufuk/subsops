@@ -5,38 +5,48 @@ import firestore from './firestore';
 import mailgun from './mailgun';
 
 const insertSubscriber = async (response, sub) => {
+  let record;
   sub.state = 'unconfirmed';
   sub.createDate = new Date();
   sub.updateDate = new Date();
 
   try {
-    const result = await firestore.insertSubscriber(sub);
+    record = await firestore.insertSubscriber(sub);
+  } catch (err) {
+    await mailgun.error(
+      'SubsOps: Unexpected Server Error',
+      `Error occurred while saving new subscriber:\n${err}`
+    );
+    return response.status(500).end();
+  }
+
+  try {
     // send a confirmation email to the new subscriber
-    sub.id = result.id;
     const userConfirmPromise = mailgun.send(
       sub.email,
       "Welcome to Utku's Blog!",
       'new-subscriber',
       {
         user_name: sub.name,
-        confirm_url: `https://utkuufuk.com/complete/?name=${sub.name}&id=${sub.id}`,
+        confirm_url: `https://utkuufuk.com/complete/?name=${sub.name}&id=${record.id}`,
       }
     );
 
     // send a new subscriber notificaiton email
-    const subject = 'You Have a New Unconfirmed Subsciber!';
-    const body = 'ID: ' + sub.id + '\nName: ' + sub.name + '\nEmail: ' + sub.email;
-
-    const adminNotifyPromise = mailgun.log(subject, body);
+    const body = 'ID: ' + record.id + '\nName: ' + sub.name + '\nEmail: ' + sub.email;
+    const adminNotifyPromise = mailgun.info('You Have a New Unconfirmed Subsciber!', body);
     const results = Promise.all([userConfirmPromise, adminNotifyPromise]);
 
     console.log(
       `Confirmation email sent: ${results[0]}` +
-        `\nNew subscriber notification sent: ${sub.id}, ${sub.name}, ${sub.email}`
+        `\nNew subscriber notification sent: ${record.id}, ${sub.name}, ${sub.email}`
     );
-    return response.status(201).send(sub.name + ':' + sub.id);
+    return response.status(201).send(sub.name + ':' + record.id);
   } catch (err) {
-    console.error(err);
+    await mailgun.error(
+      'SubsOps: Unexpected Server Error',
+      `Error occurred while sending new subscriber emails:\n${err}`
+    );
     return response.status(500).end();
   }
 };
@@ -59,13 +69,11 @@ const createSubscriber = async (request, response) => {
     return insertSubscriber(response, sub);
   }
 
-  const body =
-    `Illegal subscriber creation attempt:\nEvent Date: ` +
-    `${new Date().toISOString()} \nName: ${sub.name}\nEmail ${sub.email}`;
-
   try {
-    const res = await mailgun.log('Illegal Subscription', body);
-    console.warn('Warning mail sent:', res, '\n', body);
+    const body =
+      `Illegal subscriber creation attempt:\nEvent Date: ` +
+      `${new Date().toISOString()} \nName: ${sub.name}\nEmail ${sub.email}`;
+    await mailgun.warn('Illegal Subscription', body);
     return response.status(422).send(body);
   } catch (err) {
     console.error(err);
@@ -81,6 +89,7 @@ const updateSubscriber = async (request, response, type, oldState, newState) => 
   try {
     const sub = result.data();
     valid = sub.state === oldState;
+
     if (!valid) {
       subject = `Illegal ${type} Attempt`;
       message = `There was an illegal ${type} attempt.\n\nID: ${id}\nName: ${sub.name}`;
@@ -92,10 +101,13 @@ const updateSubscriber = async (request, response, type, oldState, newState) => 
       await firestore.updateSubscriber(id, sub);
     }
 
-    await mailgun.log(subject, message);
-    return valid ? response.status(200).send(message) : response.status(400).send(message);
+    await mailgun[valid ? 'info' : 'warn'](subject, message);
+    return response.status(valid ? 200 : 400).send(message);
   } catch (err) {
-    console.error(err);
+    await mailgun.error(
+      'SubsOps: Unexpected Server Error',
+      `Error occurred while handling subscriber update:\n${err}`
+    );
     return response.status(500).end();
   }
 };
