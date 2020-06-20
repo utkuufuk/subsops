@@ -1,8 +1,8 @@
 import * as functions from 'firebase-functions';
 import * as validator from 'email-validator';
 import * as cors from 'cors';
-import email from './email';
 import firestore from './firestore';
+import mailgun from './mailgun';
 
 const insertSubscriber = async (response, sub) => {
   sub.state = 'unconfirmed';
@@ -13,20 +13,22 @@ const insertSubscriber = async (response, sub) => {
     const result = await firestore.insertSubscriber(sub);
     // send a confirmation email to the new subscriber
     sub.id = result.id;
-    let body =
-      `Hey ${sub.name},\n\nThank you for subscribing to my blog.\n\n` +
-      `Please click the link below to confirm your subscription:\n\n` +
-      `${functions.config().blog.website}/complete/?name=${sub.name}` +
-      `&id=${sub.id}\n\nCheers,\n\nUtku`;
-
-    const confirmPromise = email.send(sub.email, "Welcome to Utku's Blog!", body, 'text');
+    const userConfirmPromise = mailgun.send(
+      sub.email,
+      "Welcome to Utku's Blog!",
+      'new-subscriber',
+      {
+        user_name: sub.name,
+        confirm_url: `https://utkuufuk.com/complete/?name=${sub.name}&id=${sub.id}`,
+      }
+    );
 
     // send a new subscriber notificaiton email
-    let subject = 'You Have a New Unconfirmed Subsciber!';
-    body = 'ID: ' + sub.id + '\nName: ' + sub.name + '\nEmail: ' + sub.email;
+    const subject = 'You Have a New Unconfirmed Subsciber!';
+    const body = 'ID: ' + sub.id + '\nName: ' + sub.name + '\nEmail: ' + sub.email;
 
-    const notifyPromise = email.send(functions.config().admin.email, subject, body, 'text');
-    const results = Promise.all([confirmPromise, notifyPromise]);
+    const adminNotifyPromise = mailgun.log(subject, body);
+    const results = Promise.all([userConfirmPromise, adminNotifyPromise]);
 
     console.log(
       `Confirmation email sent: ${results[0]}` +
@@ -35,7 +37,7 @@ const insertSubscriber = async (response, sub) => {
     return response.status(201).send(sub.name + ':' + sub.id);
   } catch (err) {
     console.error(err);
-    return response.status(500).send('An unexpected server error occurred.');
+    return response.status(500).end();
   }
 };
 
@@ -62,17 +64,12 @@ const createSubscriber = async (request, response) => {
     `${new Date().toISOString()} \nName: ${sub.name}\nEmail ${sub.email}`;
 
   try {
-    const result = await email.send(
-      functions.config().admin.email,
-      'Illegal Subscription',
-      body,
-      'text'
-    );
-    console.warn('Warning mail sent:', result, '\n', body);
+    const res = await mailgun.log('Illegal Subscription', body);
+    console.warn('Warning mail sent:', res, '\n', body);
     return response.status(422).send(body);
   } catch (err) {
     console.error(err);
-    return response.status(500).send('An unexpected server error occurred.');
+    return response.status(500).end();
   }
 };
 
@@ -92,19 +89,19 @@ const updateSubscriber = async (request, response, type, oldState, newState) => 
       message = `${type} successful.\nID: ${id}\nName: ${sub.name}\nEmail: ${sub.email}`;
       sub['state'] = newState;
       sub['updateDate'] = new Date();
-      firestore.updateSubscriber(id, sub);
+      await firestore.updateSubscriber(id, sub);
     }
 
-    await email.send(functions.config().admin.email, subject, message, 'text');
-
+    await mailgun.log(subject, message);
     return valid ? response.status(200).send(message) : response.status(400).send(message);
   } catch (err) {
     console.error(err);
-    return response.status(500).send('An unexpected server error occurred.');
+    return response.status(500).end();
   }
 };
 
-const notifySubscribers = async (snap, _) => {
+// notifies confirmed subscribers upon a blogarticle creation event on firestore
+export const publish = functions.firestore.document('blogposts/{id}').onCreate(async (snap, _) => {
   const article = snap.data();
   const results = await firestore.fetchSubscribersByState('confirmed');
 
@@ -123,24 +120,20 @@ const notifySubscribers = async (snap, _) => {
       return;
     }
 
-    const body =
-      `Hey ${sub.name},<p>Check out my new blog article:<br><a href=${article.url}>${article.url}</a>` +
-      `<p>Have a nice day,<p>Utku<p><a style="font-size: 9px" href=${
-        functions.config().blog.website
-      }/unsubscribe/?name=${sub.name}&id=${result.id}>unsubscribe</a>`;
-
     try {
-      await email.send(sub.email, article.header, body, 'html');
+      await mailgun.send(sub.email, '[utkuufuk.com] New Blog Post', 'new-blog-post-notification', {
+        user_id: result.id,
+        user_name: sub.name,
+        post_header: article.header,
+        post_url: article.url,
+      });
     } catch (err) {
       console.error(err);
     }
   });
 
-  console.log('Finished sending notification emails.');
-};
-
-// notifies confirmed subscribers upon a blogarticle creation event on firestore
-export const publish = functions.firestore.document('blogposts/{id}').onCreate(notifySubscribers);
+  console.log('Queued all notification emails.');
+});
 
 // creates a new subscriber
 export const subscribe = functions.https.onRequest((request, response) => {

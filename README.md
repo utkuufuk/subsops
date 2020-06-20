@@ -16,11 +16,9 @@ npm run deploy
 ## Configuration
 ### Set Remote Configuration
 ```sh
-# set admin username & password
-firebase functions:config:set admin.email="utkuufuk" admin.password="ilikebananas"
-
-# set website url
-firebase functions:config:set blog.website="https://utkuufuk.com"
+firebase functions:config:set mailgun.api_key=<api_key>
+firebase functions:config:set mailgun.domain=<domain>
+firebase functions:config:set mailgun.email=<admin_email>
 ```
 
 ### Retrieve Current Envvironment Configuration
@@ -32,16 +30,3 @@ firebase functions:config:get
 ```sh
 firebase functions:config:get > functions/.runtimeconfig.json
 ```
-
-## Sequence Diagrams
-### Subscription
-![Subscription](plantuml/subscribe.png)
-
-### Confirmation
-![Confirmation](plantuml/confirm.png)
-
-### Blog Post Notification
-![Publish](plantuml/publish.png)
-
-### Unsubscription
-![Unsubscription](plantuml/unsubscribe.png)
