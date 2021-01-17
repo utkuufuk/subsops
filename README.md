@@ -30,7 +30,7 @@ npm install
 firebase login
 ```
 
-## Publishing Blog Posts
+## Publishing Blog Posts
 1. Update `publish.sh` with the correct `<post_header>` and `<post_url>` values.
 
 2. Serve functions locally:
