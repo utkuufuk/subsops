@@ -1,3 +1,4 @@
 node_modules/
 .runtimeconfig.json
 build
+ui-debug.log

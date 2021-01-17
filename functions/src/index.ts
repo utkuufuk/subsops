@@ -112,40 +112,44 @@ const updateSubscriber = async (request, response, type, oldState, newState) => 
   }
 };
 
-// notifies confirmed subscribers upon a blogarticle creation event on firestore
-export const publish = functions.firestore.document('blogposts/{id}').onCreate(async (snap, _) => {
-  const article = snap.data();
-  const results = await firestore.fetchSubscribersByState('confirmed');
+// sends notification emails to subscribers, meant to be served locally
+export const publish = functions.https.onRequest(
+  async (request, response): Promise<any> => {
+    const results = await firestore.fetchSubscribersByState('confirmed');
+    const subscribers = results.docs.map((doc) => ({
+      id: doc.id,
+      email: doc.data().email,
+      name: doc.data().name,
+    }));
 
-  results.forEach(async (result) => {
-    const sub = result.data();
+    const interval = setInterval(async () => {
+      const sub = subscribers.pop();
+      if (!sub) {
+        clearInterval(interval);
+        return;
+      }
 
-    // test email should only be sent to testers (if any of header, date or url is empty)
-    if ((!article.header || !article.url || !article.date) && !sub.tester) {
-      console.log(`not sending test email to non-test user: ${sub.name}`);
-      return;
-    }
+      try {
+        await mailgun.send(
+          sub.email,
+          '[utkuufuk.com] New Blog Post',
+          'new-blog-post-notification',
+          {
+            user_id: sub.id,
+            user_name: sub.name,
+            post_header: request.body.header,
+            post_url: request.body.url,
+          }
+        );
+        console.log(`Email sent to  ${sub.id}, ${sub.name}, ${sub.email}`);
+      } catch (err) {
+        console.error(`Could not send email to ${sub.email}: ${err.message ?? err}`);
+      }
+    }, 5000);
 
-    // do not send to users with a "skip" attribute set to "true"
-    if (sub.skip) {
-      console.log(`skipping flagged user: ${sub.name}, ${sub.email}`);
-      return;
-    }
-
-    try {
-      await mailgun.send(sub.email, '[utkuufuk.com] New Blog Post', 'new-blog-post-notification', {
-        user_id: result.id,
-        user_name: sub.name,
-        post_header: article.header,
-        post_url: article.url,
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  });
-
-  console.log('Queued all notification emails.');
-});
+    return response.status(200).json(subscribers);
+  }
+);
 
 // creates a new subscriber
 export const subscribe = functions.https.onRequest((request, response) => {
